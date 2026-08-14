@@ -1,7 +1,7 @@
 name: Convert MiniFASNet to TFLite
 
 on:
-  workflow_dispatch: # 支持网页手动一键触发
+  workflow_dispatch:
   push:
     branches: [ master, main ]
 
@@ -21,7 +21,7 @@ jobs:
       - name: 安装 PyTorch 与基础库
         run: |
           python -m pip install --upgrade pip
-          pip install torch torchvision onnx onnxscript onnxruntime tensorflow tf-keras
+          pip install torch torchvision onnx onnxscript onnxruntime tensorflow tf-keras numpy
 
       - name: 安装 NVIDIA GraphSurgeon
         run: |
@@ -33,6 +33,10 @@ jobs:
 
       - name: 导出为 ONNX
         run: python export_tflite.py
+
+      - name: 生成本地测试占位数据 (修复第三方 S3 下载阻断 Bug)
+        run: |
+          python -c "import numpy as np; np.save('calibration_image_sample_data_20x128x128x3_float32.npy', np.zeros((20, 128, 128, 3), dtype=np.float32))"
 
       - name: 压制转换为 TFLite (自动适配 NHWC 维度)
         run: |
