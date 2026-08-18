@@ -101,3 +101,39 @@ python train.py --device_ids 0  --patch_info your_patch
  ```
  python test.py --image_name your_image_name
  ```      
+## 更新日志
+### 📦 轻量级静默活体模型迁移与边缘端优化说明
+
+#### 1. 核心技术实施点 (Technical Engineering)
+
+- **计算图重构与格式转换 (Graph Re-engineering & Export)**
+  - 将原有的 PyTorch 动态图权重解析并固化为标准化 ONNX 中间表示（IR），最终压制编译为针对移动端/嵌入式优化的 TensorFlow Lite (`.tflite`) FlatBuffer 格式。
+- **张量内存布局重排 (NCHW → NHWC Layout Optimization)**
+  - 针对 ARM 架构 CPU 的 NEON 向量指令集特点，在转换阶段自动重构算子计算图，将通道优先（`NCHW`）转置为内存连续的数据优先（`NHWC`）排布，彻底消除移动端运行时（Runtime）多余的张量转置开销。
+- **统一轻量级推理引擎 (Single-Runtime Architecture)**
+  - 彻底剥离原方案中笨重且独立的 C++/NDK 底层推理框架与 JNI 桥接层，与主干人脸识别链路共用统一的 TFLite/LiteRT 运行时，避免在受限内存设备上并存多个深度学习引擎导致的内存碎片化与 OOM 风险。
+- **像素级输入流水线校准 (Pre-processing Pipeline Alignment)**
+  - **空间上下文补全**：实施 2.7 倍人脸边界框空间外延，确保高频反光与边缘失真特征完整输入。
+  - **等比无畸变投影**：采用严格 1:1 正方形安全裁切与区域重采样算法，杜绝多尺度缩放产生的人脸拉伸形变。
+  - **动态范围对齐**：精确匹配模型训练分布，采用原始 `[0.0, 255.0]` 浮点像素与 BGR 通道序列直接驱动卷积核，确保特征响应最大化。
+- **云端无头构建流水线 (Headless CI/CD Automation)**
+  - 构建全自动化的计算图转换与算子兼容性修复工作流，实现一键式自动化产物导出与校验。
+
+---
+
+#### 2. 适用场景与工程价值 (Applicable Scenarios & Value)
+
+- **极低算力/内存受限边缘终端**
+  - 专为低功耗 ARM 架构（如 Cortex-A53 核心集群、2GB RAM 或更低规格的 Android 工控主板、考勤门禁闸机）设计。
+  - 模型仅约 2.7MB，在入门级 CPU 上单帧纯推理开销控制在几十毫秒（~70ms）级别，内存与算力开销极低。
+- **单目 RGB 纯视觉静默防伪 (Passive PAD)**
+  - 无需红外（IR）、结构光或 3D ToF 等特殊硬件外设，仅依赖常规单目彩色摄像头即可实现被动式、无感静默防伪，精准拦截打印照片、电子屏幕翻拍及 3D 仿生面具攻击。
+- **算力级联前置拦截器 (Cascade Pre-filtering)**
+  - 可作为重度人脸特征提取（1:1 / 1:N 比对）系统的前置安全网关，在毫秒级时间内过滤非法攻击请求，大幅节省主干特征网络的无效算力开销。
+
+---
+
+#### 3. 模型技术规格 (Technical Specifications)
+
+- **输入张量**：`[1, 80, 80, 3]`（NHWC 排布，Float32 浮点型，BGR 色彩空间，`[0.0, 255.0]` 未归一化输入）
+- **输出张量**：`[1, 3]`（Float32 Logits 分类：`2D攻击` / `真人活体` / `3D伪造`）
