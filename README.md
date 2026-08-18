@@ -15,11 +15,19 @@
 
 使用自研的模型剪枝方法，将MobileFaceNet的Flops从0.224G降低待了0.081G，在精度损失不大的情况下,明显提升模型的性能(降低计算量与参数量).  
 
-|Model|FLOPs|Params|
-| :------:|:-----:|:-----:| 
-|MobileFaceNet|0.224G|0.991M|
-|MiniFASNetV1|0.081G|0.414M|
-|MiniFASNetV2|0.081G|0.435M|
+| 模型架构 (Backbone) | 计算量 (FLOPs) | 参数量 (Params) | 相对 MobileFaceNet 算力降幅 |
+| :--- | :---: | :---: | :---: |
+| MobileFaceNet (Baseline) | 0.224 G | 0.991 M | - |
+| MiniFASNetV1 | 0.081 G | 0.414 M | 63.8% ↓ |
+| **MiniFASNetV2 (本项目采用)** | **0.081 G** | **0.435 M** | **63.8% ↓** |
+
+> **说明**：在保留高频纹理判别能力的前提下，模型仅需 ~81 MFLOPs 算力开销；且在转换阶段剔除了训练阶段专用的傅里叶辅助生成分支（FTGenerator），确保推理图极致纯粹。
+
+  工程部署优化收益 (Deployment Enhancements)
+在完成向 TFLite 的计算图压制与迁移后，获得了以下端侧运行收益：
+- **NHWC 内存排布优化**：对齐 ARM Cortex 架构 NEON 指令集的数据连续访问特性，消除运行时 Transpose 算子开销。
+- **单运行时统一 (Single Runtime)**：彻底剔除 NDK/NCNN 运行时，与主干人脸特征提取引擎复用同一 TFLite 实例，节省内存开销并避免多框架线程竞争。
+- **零拷贝数据管线**：采用 Java 直读 Native ByteBuffer 的方式直传像素流，消除了 JNI 跨层图像深拷贝带来的 GC 抖动。
 
 ## APK
 ### APK源码-小视科技版本
@@ -35,7 +43,6 @@
 | Model(input 80x80)|FLOPs|Speed| FPR | TPR |备注 |
 | :------:|:-----:|:-----:| :----: | :----: | :----: |
 |   APK模型 |84M| 20ms | 1e-5|97.8%| 开源|
-| 高精度模型 |162M| 40ms| 1e-5 |99.7%| 未开源 |
 
 ### 测试方法  
 - 显示信息:速度(ms), 置信度(0~1)以及活体检测结果(真脸or假脸)
